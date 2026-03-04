@@ -1,0 +1,72 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>LIVE Mat Updates</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+            <style>
+                body { font-family: sans-serif; background: #0f1418; color: white; text-align: center; padding: 10px; }
+                .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
+                .mat-card { background: #1e272e; border: 2px solid #3d4e5d; border-radius: 12px; padding: 10px; }
+                .mat-title { color: #f1c40f; font-size: 1.8em; font-weight: bold; border-bottom: 1px solid #3d4e5d; margin-bottom: 10px; }
+                .bout-item { background: #2c3e50; margin: 8px 0; padding: 10px; border-radius: 8px; border-left: 5px solid #7f8c8d; }
+                .on-mat { background: #1e8449; border-left: 5px solid #2ecc71; animation: pulse 2s infinite; }
+                @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+                .bout-num { color: #f1c40f; font-weight: bold; font-size: 0.8em; }
+                .score-pill { background: black; padding: 2px 8px; border-radius: 4px; float: right; }
+            </style>
+        </head>
+        <body>
+            <a href="MMWL-Championship-1-2026.html" style="color:#3498db; text-decoration:none;">← BACK TO BRACKETS</a>
+            <h1>LIVE MAT BOARD</h1>
+            <div id="mats-container" class="grid">Connecting to MatLogic Live...</div>
+
+            <script>
+                const firebaseConfig = {
+                    apiKey: "YOUR_API_KEY",
+                    authDomain: "YOUR_PROJECT.firebaseapp.com",
+                    projectId: "YOUR_PROJECT_ID",
+                    storageBucket: "YOUR_PROJECT.appspot.com",
+                    messagingSenderId: "YOUR_ID",
+                    appId: "YOUR_APP_ID"
+                };
+                firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+
+                db.collection("meets").doc("champ1").collection("bouts")
+                .where("Status", "in", ["In Progress", "On Deck", "Called"])
+                .onSnapshot((snapshot) => {
+                    const mats = {};
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        const m = d.Mat || "1";
+                        if (!mats[m]) mats[m] = [];
+                        mats[m].push(d);
+                    });
+                    render(mats);
+                });
+
+                function render(mats) {
+                    const container = document.getElementById('mats-container');
+                    container.innerHTML = '';
+                    Object.keys(mats).sort((a,b) => a-b).forEach(m => {
+                        let h = `<div class="mat-card"><div class="mat-title">MAT ${m}</div>`;
+                        mats[m].sort((a,b) => a.Index - b.Index).slice(0,5).forEach((b, i) => {
+                            const cls = b.Status === "In Progress" ? "on-mat" : "";
+                            h += `<div class="bout-item ${cls}">
+                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight}</div>
+                                    <div style="text-align:left">
+                                        <div style="color:white">${b.RedName} <span class="score-pill">${b.RedScore || 0}</span></div>
+                                        <div style="color:white">${b.BlueName} <span class="score-pill">${b.BlueScore || 0}</span></div>
+                                    </div>
+                                </div>`;
+                        });
+                        container.innerHTML += h + '</div>';
+                    });
+                }
+            </script>
+        </body>
+        </html>
+        
