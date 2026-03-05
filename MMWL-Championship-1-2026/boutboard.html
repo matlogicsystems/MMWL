@@ -11,20 +11,19 @@
                 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; padding: 15px; }
                 .mat-card { background: #1e272e; border: 2px solid #3d4e5d; border-radius: 12px; padding: 10px; }
                 .mat-title { color: #f1c40f; font-size: 2em; font-weight: bold; border-bottom: 2px solid #f1c40f; margin-bottom: 10px; padding-bottom: 5px; }
-                .bout-item { background: #2c3e50; margin: 8px 0; padding: 12px; border-radius: 8px; position: relative; border-left: 6px solid #7f8c8d; text-align: left; }
+                .bout-item { background: #2c3e50; margin: 8px 0; padding: 12px; border-radius: 8px; border-left: 6px solid #7f8c8d; text-align: left; }
                 .on-mat { background: #1e8449; border-left-color: #2ecc71; box-shadow: 0 0 15px rgba(46, 204, 113, 0.3); }
                 .bout-num { color: #f1c40f; font-weight: bold; font-size: 0.9em; margin-bottom: 5px; }
                 .player-row { display: flex; justify-content: space-between; font-size: 1.1em; margin: 2px 0; }
                 .score { background: #000; padding: 2px 10px; border-radius: 4px; font-weight: bold; min-width: 30px; text-align: center; font-family: monospace; }
-                .status-tag { font-size: 0.7em; background: #34495e; padding: 2px 6px; border-radius: 4px; float: right; color: #bdc3c7; text-transform: uppercase; }
             </style>
         </head>
         <body>
             <div style="padding: 20px; background: #1e272e; border-bottom: 1px solid #3d4e5d;">
-                <a href="MMWL-Championship-1-2026.html" style="color:#3498db; text-decoration:none; font-weight:bold; float:left;">← BRACKETS</a>
-                <h1 style="margin:0; display:inline-block; color:#f1c40f;">LIVE MAT UPDATES</h1>
+                <h1 style="margin:0; color:#f1c40f;">LIVE MAT UPDATES</h1>
+                <p id="debug-status" style="font-size: 0.8em; color: #576574;">Initializing...</p>
             </div>
-            <div id="mats-container" class="grid">Connecting to Firestore...</div>
+            <div id="mats-container" class="grid">Searching for bouts...</div>
 
             <script>
                 const firebaseConfig = {
@@ -38,59 +37,60 @@
                 firebase.initializeApp(firebaseConfig);
                 const db = firebase.firestore();
 
-                db.collection("meets").doc("champ1").collection("bouts")
+                const meetId = "champ1".trim();
+                const statusLabel = document.getElementById('debug-status');
+
+                db.collection("meets").doc(meetId).collection("bouts")
                   .onSnapshot((snapshot) => {
+                      console.log("Firestore sync! Documents found:", snapshot.size);
+                      statusLabel.innerText = "Syncing " + snapshot.size + " bouts for " + meetId;
+                      
                       const mats = {};
                       snapshot.forEach(doc => {
                           const d = doc.data();
-                          const status = d.Status || "";
-                          const matVal = d.Mat ? String(d.Mat) : "1";
+                          const status = (d.Status || "").toLowerCase();
+                          // Force Mat to string and handle numbers or missing values
+                          const matVal = d.Mat ? String(d.Mat).trim() : "1";
                           
-                          // Include Pending, In Progress, On Deck, and Called
-                          if (status !== "Completed" && matVal.toUpperCase() !== "N/A") {
+                          if (status !== "completed" && matVal.toUpperCase() !== "N/A") {
                               if (!mats[matVal]) mats[matVal] = [];
                               mats[matVal].push(d);
                           }
                       });
                       render(mats);
+                  }, (error) => {
+                      statusLabel.innerText = "Error: " + error.message;
+                      console.error(error);
                   });
 
                 function render(mats) {
                     const container = document.getElementById('mats-container');
-                    container.innerHTML = '';
+                    const keys = Object.keys(mats).sort((a,b) => parseInt(a) - parseInt(b));
                     
-                    const sortedMatKeys = Object.keys(mats).sort((a,b) => parseInt(a) - parseInt(b));
-                    
-                    if (sortedMatKeys.length === 0) {
-                        container.innerHTML = '<div style="grid-column: 1/-1; padding: 50px;"><h3>No active bouts assigned to mats yet.</h3><p>Check the brackets for upcoming matchups.</p></div>';
+                    if (keys.length === 0) {
+                        container.innerHTML = '<h3>No active bouts found.</h3>';
                         return;
                     }
 
-                    sortedMatKeys.forEach(m => {
+                    container.innerHTML = '';
+                    keys.forEach(m => {
                         let h = `<div class="mat-card"><div class="mat-title">MAT ${m}</div>`;
                         
-                        // Sort by Index (Round/Priority/Layer)
-                        const activeBouts = mats[m]
+                        // Sort by index (round*10000+Priority*100+layer)
+                        const sortedBouts = mats[m]
                             .sort((a,b) => parseFloat(a.Index || 0) - parseFloat(b.Index || 0))
                             .slice(0, 5);
 
-                        activeBouts.forEach((b, i) => {
-                            const status = b.Status || "Pending";
+                        sortedBouts.forEach((b, i) => {
+                            const status = (b.Status || "Pending");
                             const isOnMat = status === "In Progress" || (i === 0 && status !== "Pending");
-                            const cardClass = isOnMat ? "bout-item on-mat" : "bout-item";
                             
                             h += `
-                                <div class="${cardClass}">
-                                    <div class="status-tag">${status}</div>
-                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight} lbs</div>
-                                    <div class="player-row">
-                                        <span>${b.RedName || 'TBD'}</span>
-                                        <span class="score">${b.RedScore ?? 0}</span>
-                                    </div>
-                                    <div class="player-row">
-                                        <span>${b.BlueName || 'TBD'}</span>
-                                        <span class="score">${b.BlueScore ?? 0}</span>
-                                    </div>
+                                <div class="bout-item ${isOnMat ? 'on-mat' : ''}">
+                                    <div style="float:right; font-size:0.7em; opacity:0.6;">${status}</div>
+                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight}</div>
+                                    <div class="player-row"><span>${b.RedName || 'TBD'}</span><span class="score">${b.RedScore ?? 0}</span></div>
+                                    <div class="player-row"><span>${b.BlueName || 'TBD'}</span><span class="score">${b.BlueScore ?? 0}</span></div>
                                 </div>`;
                         });
                         container.innerHTML += h + '</div>';
