@@ -9,21 +9,23 @@
             <style>
                 body { font-family: sans-serif; background: #0f1418; color: white; text-align: center; padding: 10px; }
                 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; }
-                .mat-card { background: #1e272e; border: 2px solid #3d4e5d; border-radius: 12px; padding: 10px; }
+                .mat-card { background: #1e272e; border: 2px solid #3d4e5d; border-radius: 12px; padding: 10px; min-height: 100px; }
                 .mat-title { color: #f1c40f; font-size: 1.8em; font-weight: bold; border-bottom: 1px solid #3d4e5d; margin-bottom: 10px; }
                 .bout-item { background: #2c3e50; margin: 8px 0; padding: 10px; border-radius: 8px; border-left: 5px solid #7f8c8d; }
                 .on-mat { background: #1e8449; border-left: 5px solid #2ecc71; animation: pulse 2s infinite; }
                 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
                 .bout-num { color: #f1c40f; font-weight: bold; font-size: 0.8em; }
-                .score-pill { background: black; padding: 2px 8px; border-radius: 4px; float: right; }
+                .score-pill { background: black; padding: 2px 8px; border-radius: 4px; float: right; font-family: monospace; }
+                .empty-msg { color: #576574; font-style: italic; margin-top: 20px; }
             </style>
         </head>
         <body>
-            <a href="MMWL-Championship-1-2026.html" style="color:#3498db; text-decoration:none;">← BACK TO BRACKETS</a>
+            <a href="MMWL-Championship-1-2026.html" style="color:#3498db; text-decoration:none; font-weight:bold;">← BACK TO BRACKETS</a>
             <h1>LIVE MAT BOARD</h1>
             <div id="mats-container" class="grid">Connecting to MatLogic Live...</div>
 
             <script>
+                // --- YOUR FIREBASE CONFIG HERE ---
                 const firebaseConfig = {
                     apiKey: "YOUR_API_KEY",
                     authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -32,34 +34,61 @@
                     messagingSenderId: "YOUR_ID",
                     appId: "YOUR_APP_ID"
                 };
+                
                 firebase.initializeApp(firebaseConfig);
                 const db = firebase.firestore();
 
+                // REMOVED THE .where() FILTER TO AVOID INDEX ISSUES
                 db.collection("meets").doc("champ1").collection("bouts")
-                .where("Status", "in", ["In Progress", "On Deck", "Called"])
                 .onSnapshot((snapshot) => {
                     const mats = {};
                     snapshot.forEach(doc => {
                         const d = doc.data();
+                        const status = d.Status || "";
                         const m = d.Mat || "1";
-                        if (!mats[m]) mats[m] = [];
-                        mats[m].push(d);
+                        
+                        // Filter out completed or invalid bouts in JS
+                        if (status !== "Completed" && m.toUpperCase() !== "N/A") {
+                            if (!mats[m]) mats[m] = [];
+                            mats[m].push(d);
+                        }
                     });
                     render(mats);
+                }, (error) => {
+                    console.error("Firestore Error:", error);
+                    document.getElementById('mats-container').innerHTML = "Database Error: " + error.message;
                 });
 
                 function render(mats) {
                     const container = document.getElementById('mats-container');
                     container.innerHTML = '';
-                    Object.keys(mats).sort((a,b) => a-b).forEach(m => {
+                    
+                    const sortedMatKeys = Object.keys(mats).sort((a,b) => parseInt(a) - parseInt(b));
+                    
+                    if (sortedMatKeys.length === 0) {
+                        container.innerHTML = '<div class="empty-msg">No active bouts found. Check the brackets for results!</div>';
+                        return;
+                    }
+
+                    sortedMatKeys.forEach(m => {
                         let h = `<div class="mat-card"><div class="mat-title">MAT ${m}</div>`;
-                        mats[m].sort((a,b) => a.Index - b.Index).slice(0,5).forEach((b, i) => {
-                            const cls = b.Status === "In Progress" ? "on-mat" : "";
+                        
+                        // Sort by Index and take top 5
+                        const activeBouts = mats[m]
+                            .sort((a,b) => parseFloat(a.Index || 0) - parseFloat(b.Index || 0))
+                            .slice(0, 5);
+
+                        activeBouts.forEach((b, i) => {
+                            const cls = (b.Status === "In Progress" || i === 0) ? "on-mat" : "";
                             h += `<div class="bout-item ${cls}">
-                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight}</div>
-                                    <div style="text-align:left">
-                                        <div style="color:white">${b.RedName} <span class="score-pill">${b.RedScore || 0}</span></div>
-                                        <div style="color:white">${b.BlueName} <span class="score-pill">${b.BlueScore || 0}</span></div>
+                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight} lbs</div>
+                                    <div style="text-align:left; margin-top:5px;">
+                                        <div style="color:white; margin-bottom:3px;">
+                                            ${b.RedName || 'TBD'} <span class="score-pill">${b.RedScore || 0}</span>
+                                        </div>
+                                        <div style="color:white">
+                                            ${b.BlueName || 'TBD'} <span class="score-pill">${b.BlueScore || 0}</span>
+                                        </div>
                                     </div>
                                 </div>`;
                         });
