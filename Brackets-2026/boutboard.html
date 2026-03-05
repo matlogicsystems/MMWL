@@ -23,7 +23,7 @@
         <body>
             <div class="header">
                 <h1 style="margin:0; color:#f1c40f;">MATLOGIC LIVE</h1>
-                <div id="status" style="font-size:0.8em; color:#576574;">Connecting to champ1...</div>
+                <div id="status" style="font-size:0.8em; color:#576574;">Connecting to champ2...</div>
             </div>
             <div id="mats-container" class="grid"></div>
 
@@ -43,7 +43,7 @@
                 const db = firebase.firestore();
 
                 // Listen to the exact same path as the Python script
-                db.collection("meets").doc("champ1").collection("bouts")
+                db.collection("meets").doc("champ2").collection("bouts")
                 .onSnapshot((snapshot) => {
                     document.getElementById('status').innerText = "Live Syncing: " + snapshot.size + " bouts found";
                     const mats = {};
