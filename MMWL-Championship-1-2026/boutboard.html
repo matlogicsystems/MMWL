@@ -7,25 +7,28 @@
             <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
             <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
             <style>
-                body { font-family: 'Segoe UI', sans-serif; background: #0f1418; color: white; text-align: center; padding: 10px; margin: 0; }
-                .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; padding: 15px; }
-                .mat-card { background: #1e272e; border: 2px solid #3d4e5d; border-radius: 12px; padding: 10px; }
-                .mat-title { color: #f1c40f; font-size: 2em; font-weight: bold; border-bottom: 2px solid #f1c40f; margin-bottom: 10px; padding-bottom: 5px; }
-                .bout-item { background: #2c3e50; margin: 8px 0; padding: 12px; border-radius: 8px; border-left: 6px solid #7f8c8d; text-align: left; }
-                .on-mat { background: #1e8449; border-left-color: #2ecc71; box-shadow: 0 0 15px rgba(46, 204, 113, 0.3); }
-                .bout-num { color: #f1c40f; font-weight: bold; font-size: 0.9em; margin-bottom: 5px; }
-                .player-row { display: flex; justify-content: space-between; font-size: 1.1em; margin: 2px 0; }
-                .score { background: #000; padding: 2px 10px; border-radius: 4px; font-weight: bold; min-width: 30px; text-align: center; font-family: monospace; }
+                body { font-family: 'Segoe UI', sans-serif; background: #0f1418; color: white; text-align: center; margin: 0; }
+                .header { background: #1e272e; padding: 15px; border-bottom: 2px solid #3d4e5d; }
+                .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; padding: 20px; }
+                .mat-card { background: #1e272e; border-radius: 12px; border: 1px solid #3d4e5d; padding: 15px; }
+                .mat-title { color: #f1c40f; font-size: 2.2em; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #f1c40f; }
+                .bout-item { background: #2c3e50; margin: 10px 0; padding: 12px; border-radius: 8px; text-align: left; border-left: 6px solid #7f8c8d; }
+                .on-mat { background: #1e8449; border-left-color: #2ecc71; animation: pulse 2s infinite; }
+                @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+                .bout-info { color: #f1c40f; font-weight: bold; font-size: 0.9em; }
+                .row { display: flex; justify-content: space-between; font-size: 1.2em; margin-top: 5px; }
+                .score { background: #000; padding: 0 10px; border-radius: 4px; font-family: monospace; }
             </style>
         </head>
         <body>
-            <div style="padding: 20px; background: #1e272e; border-bottom: 1px solid #3d4e5d;">
-                <h1 style="margin:0; color:#f1c40f;">LIVE MAT UPDATES</h1>
-                <p id="debug-status" style="font-size: 0.8em; color: #576574;">Initializing...</p>
+            <div class="header">
+                <h1 style="margin:0; color:#f1c40f;">MATLOGIC LIVE</h1>
+                <div id="status" style="font-size:0.8em; color:#576574;">Connecting to champ1...</div>
             </div>
-            <div id="mats-container" class="grid">Searching for bouts...</div>
+            <div id="mats-container" class="grid"></div>
 
             <script>
+                // --- PASTE YOUR FIREBASE CONFIG FROM THE CONSOLE HERE ---
                 const firebaseConfig = {
                     apiKey: "YOUR_API_KEY",
                     authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -34,68 +37,44 @@
                     messagingSenderId: "YOUR_ID",
                     appId: "YOUR_APP_ID"
                 };
+
                 firebase.initializeApp(firebaseConfig);
                 const db = firebase.firestore();
 
-                const meetId = "champ1".trim();
-                const statusLabel = document.getElementById('debug-status');
-
-                db.collection("meets").doc(meetId).collection("bouts")
-                  .onSnapshot((snapshot) => {
-                      console.log("Firestore sync! Documents found:", snapshot.size);
-                      statusLabel.innerText = "Syncing " + snapshot.size + " bouts for " + meetId;
-                      
-                      const mats = {};
-                      snapshot.forEach(doc => {
-                          const d = doc.data();
-                          const status = (d.Status || "").toLowerCase();
-                          // Force Mat to string and handle numbers or missing values
-                          const matVal = d.Mat ? String(d.Mat).trim() : "1";
-                          
-                          if (status !== "completed" && matVal.toUpperCase() !== "N/A") {
-                              if (!mats[matVal]) mats[matVal] = [];
-                              mats[matVal].push(d);
-                          }
-                      });
-                      render(mats);
-                  }, (error) => {
-                      statusLabel.innerText = "Error: " + error.message;
-                      console.error(error);
-                  });
-
-                function render(mats) {
-                    const container = document.getElementById('mats-container');
-                    const keys = Object.keys(mats).sort((a,b) => parseInt(a) - parseInt(b));
+                // Listen to the exact same path as the Python script
+                db.collection("meets").doc("champ1").collection("bouts")
+                .onSnapshot((snapshot) => {
+                    document.getElementById('status').innerText = "Live Syncing: " + snapshot.size + " bouts found";
+                    const mats = {};
                     
-                    if (keys.length === 0) {
-                        container.innerHTML = '<h3>No active bouts found.</h3>';
-                        return;
-                    }
+                    snapshot.forEach(doc => {
+                        const d = doc.data();
+                        const matNum = d.Mat || "1";
+                        if (d.Status !== "Completed" && matNum.toUpperCase() !== "N/A") {
+                            if (!mats[matNum]) mats[matNum] = [];
+                            mats[matNum].push(d);
+                        }
+                    });
 
+                    const container = document.getElementById('mats-container');
                     container.innerHTML = '';
-                    keys.forEach(m => {
-                        let h = `<div class="mat-card"><div class="mat-title">MAT ${m}</div>`;
-                        
-                        // Sort by index (round*10000+Priority*100+layer)
-                        const sortedBouts = mats[m]
-                            .sort((a,b) => parseFloat(a.Index || 0) - parseFloat(b.Index || 0))
-                            .slice(0, 5);
 
-                        sortedBouts.forEach((b, i) => {
-                            const status = (b.Status || "Pending");
-                            const isOnMat = status === "In Progress" || (i === 0 && status !== "Pending");
-                            
-                            h += `
-                                <div class="bout-item ${isOnMat ? 'on-mat' : ''}">
-                                    <div style="float:right; font-size:0.7em; opacity:0.6;">${status}</div>
-                                    <div class="bout-num">BOUT ${b.Bout} - ${b.Weight}</div>
-                                    <div class="player-row"><span>${b.RedName || 'TBD'}</span><span class="score">${b.RedScore ?? 0}</span></div>
-                                    <div class="player-row"><span>${b.BlueName || 'TBD'}</span><span class="score">${b.BlueScore ?? 0}</span></div>
+                    Object.keys(mats).sort((a, b) => parseInt(a) - parseInt(b)).forEach(m => {
+                        let html = `<div class="mat-card"><div class="mat-title">MAT ${m}</div>`;
+                        
+                        // Sort by Index (same as local board)
+                        mats[m].sort((a, b) => (a.Index || 0) - (b.Index || 0)).slice(0, 5).forEach((b, i) => {
+                            const isFirst = (i === 0 && b.Status !== "Pending") || b.Status === "In Progress";
+                            html += `
+                                <div class="bout-item ${isFirst ? 'on-mat' : ''}">
+                                    <div class="bout-info">BOUT ${b.Bout} - ${b.Weight}</div>
+                                    <div class="row"><span>${b.RedName || 'TBD'}</span><span class="score">${b.RedScore || 0}</span></div>
+                                    <div class="row"><span>${b.BlueName || 'TBD'}</span><span class="score">${b.BlueScore || 0}</span></div>
                                 </div>`;
                         });
-                        container.innerHTML += h + '</div>';
+                        container.innerHTML += html + '</div>';
                     });
-                }
+                });
             </script>
         </body>
         </html>
